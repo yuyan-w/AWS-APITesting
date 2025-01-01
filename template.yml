@@ -1,0 +1,234 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  # Lambda関数で利用する共通ポリシー
+  TaskPolicies:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - "arn:aws:logs:*:*:*"
+  LambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: LambdaLayer
+      ContentUri: src/layers
+  # Lambda関数を定義
+  CreateTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CreateTaskFunction
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      CodeUri: ./src/create_task
+      MemorySize: 128
+      Timeout: 3
+      Policies:
+        - !Ref TaskPolicies
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource:
+                - !GetAtt TasksTable.Arn
+      Events: # API Gatewayのトリガー設定
+        MyApiEvent:
+          Type: Api
+          Properties:
+            Path: /tasks
+            Method: POST
+            RestApiId: !Ref MyRestApi
+      Layers:
+        - !Ref LambdaLayer
+      Tags:
+        project: ApiTesting
+  ListTasksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ListTasksFunction
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      CodeUri: ./src/list_tasks
+      MemorySize: 128
+      Timeout: 3
+      Policies:
+        - !Ref TaskPolicies
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !GetAtt TasksTable.Arn
+      Events: # API Gatewayのトリガー設定
+        MyApiEvent:
+          Type: Api
+          Properties:
+            Path: /tasks
+            Method: GET
+            RestApiId: !Ref MyRestApi
+      Layers:
+        - !Ref LambdaLayer
+      Tags:
+        project: ApiTesting
+  UpdateTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: UpdateTaskFunction
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      CodeUri: ./src/update_task
+      MemorySize: 128
+      Timeout: 3
+      Policies:
+        - !Ref TaskPolicies
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource:
+                - !GetAtt TasksTable.Arn
+      Events: # API Gatewayのトリガー設定
+        MyApiEvent:
+          Type: Api
+          Properties:
+            Path: /tasks/{taskId}
+            Method: PATCH
+            RestApiId: !Ref MyRestApi
+      Tags:
+        project: ApiTesting
+  DeleteTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: DeleteTaskFunction
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      CodeUri: ./src/delete_task
+      MemorySize: 128
+      Timeout: 3
+      Policies:
+        - !Ref TaskPolicies
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:DeleteItem
+              Resource:
+                - !GetAtt TasksTable.Arn
+      Events: # API Gatewayのトリガー設定
+        MyApiEvent:
+          Type: Api
+          Properties:
+            Path: /tasks/{taskId}
+            Method: DELETE
+            RestApiId: !Ref MyRestApi
+      Tags:
+        project: ApiTesting
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AuthFunction
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      CodeUri: ./src/auth
+      MemorySize: 128
+      Timeout: 3
+      Policies:
+        - !Ref TaskPolicies
+      Events: # API Gatewayのトリガー設定
+        MyApiEvent:
+          Type: Api
+          Properties:
+            Path: /auth
+            Method: POST
+            RestApiId: !Ref MyRestApi
+      Tags:
+        project: ApiTesting
+  # API Gateway定義
+  MyRestApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: TestRestApi
+      StageName: dev
+      Cors: # CORSの設定も可能
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt MyCognitoUserPool.Arn
+            IdentitySource: method.request.header.Authorization
+      Tags:
+        project: ApiTesting
+  # DynamoDBテーブル定義
+  TasksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: TasksTable
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S # パーティションキーの属性（文字列）
+        - AttributeName: taskId
+          AttributeType: S # ソートキーの属性（文字列）
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH # パーティションキー
+        - AttributeName: taskId
+          KeyType: RANGE # ソートキー
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+        - Key: project
+          Value: ApiTesting
+  # Cognito定義
+  MyCognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: MyCognitoUserPool
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 6
+      UsernameAttributes:
+        - email
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+  MyCognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: MyCognitoUserPoolClient
+      UserPoolId: !Ref MyCognitoUserPool
+      IdTokenValidity: 1440 # IDトークンの有効期限 (24時間)
+      AccessTokenValidity: 1440 # アクセストークンの有効期限 (24時間)
+      RefreshTokenValidity: 30 # リフレッシュトークンの有効期限 (30日)
+      TokenValidityUnits:
+        IdToken: minutes
+        AccessToken: minutes
+        RefreshToken: days
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ADMIN_NO_SRP_AUTH
+        - USER_PASSWORD_AUTH
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway Base URL"
+    Value: !Sub "https://${MyRestApi}.execute-api.${AWS::Region}.amazonaws.com/dev"
+  CognitoUserPoolId:
+    Description: "Cognito User Pool ID"
+    Value: !Ref MyCognitoUserPool
+    Export:
+      Name: MyCognitoUserPoolId
+  CognitoUserPoolClientId:
+    Description: "Cognito User Pool Client ID"
+    Value: !Ref MyCognitoUserPoolClient
+    Export:
+      Name: MyCognitoUserPoolClientId
