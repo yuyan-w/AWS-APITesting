@@ -15,6 +15,10 @@ def lambda_handler(event, context):
   try:
     logger.debug("Received event: %s", json.dumps(event))
 
+    # ユーザーIDの取得
+    user_id = event['requestContext']['authorizer']['claims']['sub']
+    logger.debug("User ID: %s", user_id)
+
     # パスパラメータから task_id を取得
     path_parameters = event.get("pathParameters")
     if not path_parameters or "taskId" not in path_parameters:
@@ -40,7 +44,7 @@ def lambda_handler(event, context):
       logger.error(f"Failed to decode: {str(e)}")
       return error_handler(400, "Request body is not valid JSON")
 
-    task = update_task(table, task_id, task_data)
+    task = update_task(table, task_id, task_data, user_id)
 
     # 成功レスポンスを返す
     return {

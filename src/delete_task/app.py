@@ -15,6 +15,10 @@ def lambda_handler(event, context):
   try:
     logger.debug("Received event: %s", json.dumps(event))
 
+    # ユーザーIDの取得
+    user_id = event['requestContext']['authorizer']['claims']['sub']
+    logger.debug("User ID: %s", user_id)
+
     # パスパラメータから task_id を取得
     path_parameters = event.get("pathParameters")
     if not path_parameters or "taskId" not in path_parameters:
@@ -26,7 +30,7 @@ def lambda_handler(event, context):
     logger.debug(f"Task ID: {task_id}")
 
     # 削除処理
-    task = delete_task(table, task_id)
+    task = delete_task(table, task_id, user_id)
 
     # 成功レスポンスを返す
     return {

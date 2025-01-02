@@ -24,7 +24,7 @@ class TaskStatus(Enum):
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-def update_task(task_table, task_id: str, task_data:  Dict[str, Any]) ->  Dict[str, Any]:
+def update_task(task_table, task_id: str, task_data:  Dict[str, Any], user_id: str) ->  Dict[str, Any]:
   logger.info("Starting to update task")
 
   # 日本時間（UTC+9）を取得
@@ -64,7 +64,10 @@ def update_task(task_table, task_id: str, task_data:  Dict[str, Any]) ->  Dict[s
   # DynamoDBで更新処理を実行
   try:
     response = task_table.update_item(
-        Key={"taskId": task_id},
+        Key={
+          "taskId": task_id,
+          "userId": user_id
+        },
         UpdateExpression=update_expression_str,
         ExpressionAttributeValues=expression_values,
         ReturnValues="ALL_NEW"

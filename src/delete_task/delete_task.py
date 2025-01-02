@@ -9,13 +9,16 @@ class TaskNotFoundError(Exception):
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-def delete_task(task_table, task_id: str) ->  Dict[str, Any]:
+def delete_task(task_table, task_id: str, user_id:str) ->  Dict[str, Any]:
   logger.info("Starting to delete task")
 
   # DynamoDBで更新処理を実行
   try:
     response = task_table.delete_item(
-        Key={"taskId": task_id},
+        Key={
+          "taskId": task_id,
+          "userId": user_id
+          },
         ReturnValues="ALL_OLD"
       )
     deleted_task = response.get("Attributes", {})

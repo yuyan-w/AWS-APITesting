@@ -218,6 +218,32 @@ Resources:
       ExplicitAuthFlows:
         - ADMIN_NO_SRP_AUTH
         - USER_PASSWORD_AUTH
+  MyCognitoIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: MyIdentityPool
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref MyCognitoUserPoolClient
+          ProviderName: !GetAtt MyCognitoUserPool.ProviderName
+  # ファイルアップロード用のS3バケット
+  UploadS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-upload-bucket"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - "*"
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            AllowedHeaders:
+              - "*"
+            MaxAge: 3000
 Outputs:
   ApiEndpoint:
     Description: "API Gateway Base URL"
